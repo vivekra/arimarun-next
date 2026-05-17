@@ -2,11 +2,8 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-
-const DEMO_USERS = {
-  'demo@arimarun.io': { password: 'demo1234', plan: 'pro', name: 'Demo User' },
-  'basic@arimarun.io': { password: 'basic123', plan: 'basic', name: 'Basic User' },
-};
+import { useRouter } from 'next/navigation';
+import { CONFIG } from '@/lib/config';
 
 const SESSION_HISTORY = [
   { date: 'May 13, 2026', duration: '2h 14m', from: 'Chrome / macOS', status: 'completed' },
@@ -16,24 +13,26 @@ const SESSION_HISTORY = [
   { date: 'May 4, 2026', duration: '58m', from: 'Chrome / macOS', status: 'completed' },
 ];
 
+
 export default function DashboardPage() {
   const [user, setUser] = useState(null);
-  const [loginEmail, setLoginEmail] = useState('demo@arimarun.io');
-  const [loginPassword, setLoginPassword] = useState('demo1234');
-  const [authError, setAuthError] = useState('');
-  
+  const [tenantId, setTenantId] = useState(null);
+  const [subscriptionStatus, setSubscriptionStatus] = useState('none');
+  const [deployments, setDeployments] = useState([]);
   const [desktopStatus, setDesktopStatus] = useState('stopped');
   const [progressPct, setProgressPct] = useState(0);
   const [progressLabel, setProgressLabel] = useState('Starting container...');
-  
   const [toastMsg, setToastMsg] = useState('');
   const [toastType, setToastType] = useState('');
-  
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalSub, setModalSub] = useState('');
-  
   const [activeSessionSecs, setActiveSessionSecs] = useState(0);
+  const [showConsole, setShowConsole] = useState(false);
+  const [consoleLogs, setConsoleLogs] = useState([]);
+  const [activeDeploymentId, setActiveDeploymentId] = useState(null);
+  const [consoleOffline, setConsoleOffline] = useState(false);
+  const router = useRouter();
 
   const showToast = (msg, type = 'success') => {
     setToastMsg(msg);
@@ -41,53 +40,182 @@ export default function DashboardPage() {
     setTimeout(() => setToastMsg(''), 4000);
   };
 
-  const doLogin = () => {
-    const u = DEMO_USERS[loginEmail];
-    if (!u || u.password !== loginPassword) {
-      setAuthError('Invalid email or password.');
-      return;
-    }
-    setUser({ email: loginEmail, ...u });
-    setAuthError('');
+  const doLogout = async () => {
+    await fetch(`${CONFIG.API_BASE_URL}/api/v1/auth/logout`, { method: 'POST', credentials: 'include' });
+    router.push('/login');
   };
 
-  const doLogout = () => {
-    if (desktopStatus === 'running') stopDesktop();
-    setUser(null);
+  useEffect(() => {
+    // Fetch current user
+    fetch(`${CONFIG.API_BASE_URL}/api/v1/auth/me`, { credentials: 'include' })
+      .then(res => {
+        if (!res.ok) throw new Error('Not logged in');
+        return res.json();
+      })
+      .then(data => {
+        setUser({ email: data.email, name: data.full_name, plan: data.plan || (data.subscription_status === 'active' ? 'pro' : 'free') });
+        setTenantId(data.tenant_id);
+        setSubscriptionStatus(data.subscription_status);
+        
+        // Fetch deployments
+        if (data.tenant_id) {
+          fetch(`${CONFIG.API_BASE_URL}/api/v1/deployments/${data.tenant_id}`, { credentials: 'include' })
+            .then(res => res.json())
+            .then(deps => {
+              if (deps.length > 0) {
+                setDeployments(deps);
+                setDesktopStatus(deps[0].status);
+                setActiveDeploymentId(deps[0].id);
+                // If it's already pending or provisioning, start polling
+                if (deps[0].status === 'pending' || deps[0].status === 'provisioning') {
+                  pollStatus(deps[0].id);
+                }
+              }
+            });
+        }
+      })
+      .catch(() => router.push('/login'));
+  }, [router]);
+
+  const pollStatus = (deploymentId) => {
+    if (!tenantId) return;
+    const interval = setInterval(() => {
+      fetch(`${CONFIG.API_BASE_URL}/api/v1/deployments/${tenantId}`, { credentials: 'include' })
+        .then(res => {
+          if (!res.ok) throw new Error('Failed to fetch status');
+          return res.json();
+        })
+        .then(deps => {
+          const d = deps.find(dep => dep.id === deploymentId);
+          setDeployments(deps);
+          if (d) {
+            setDesktopStatus(d.status);
+            if (d.status === 'running') {
+              clearInterval(interval);
+              setProgressPct(100);
+              setProgressLabel('Ready!');
+              showToast('Desktop is ready!', 'success');
+            } else if (d.status === 'failed') {
+              clearInterval(interval);
+              setProgressLabel('Provisioning failed');
+              showToast('Failed to start desktop.', 'error');
+            } else if (d.status === 'provisioning') {
+              setProgressPct(50);
+              setProgressLabel('Starting container...');
+            }
+          }
+        })
+        .catch(err => {
+          console.error("Polling error:", err);
+        });
+    }, 3000);
   };
+
+  const fetchLogs = (deploymentId) => {
+    if (!deploymentId) return;
+    fetch(`${CONFIG.API_BASE_URL}/api/v1/deployments/logs/${deploymentId}`, { credentials: 'include' })
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch logs');
+        return res.json();
+      })
+      .then(data => {
+        setConsoleOffline(false);
+        if (data.logs) {
+          setConsoleLogs(data.logs);
+        }
+      })
+      .catch(() => {
+        setConsoleOffline(true);
+      });
+  };
+
+  useEffect(() => {
+    let logInterval;
+    if (showConsole && activeDeploymentId) {
+      fetchLogs(activeDeploymentId);
+      logInterval = setInterval(() => {
+        fetchLogs(activeDeploymentId);
+      }, 2000);
+    }
+    return () => clearInterval(logInterval);
+  }, [showConsole, activeDeploymentId]);
 
   const launchDesktop = () => {
-    if (desktopStatus !== 'stopped') return;
+    if (subscriptionStatus !== 'active') {
+      showToast('Subscription required! Redirecting to plans...', 'error');
+      setTimeout(() => {
+        window.location.href = '/#pricing';
+      }, 2000);
+      return;
+    }
+
+    if (desktopStatus !== 'stopped' && desktopStatus !== 'failed') return;
+    
     setDesktopStatus('starting');
+    setProgressPct(10);
+    setProgressLabel('Requesting provisioning...');
     
-    const steps = [
-      { pct: 15, label: 'Allocating container...' },
-      { pct: 35, label: 'Pulling image layers...' },
-      { pct: 55, label: 'Starting KasmVNC...' },
-      { pct: 75, label: 'Mounting profile volume...' },
-      { pct: 90, label: 'Starting Xfce desktop...' },
-      { pct: 100, label: 'Ready!' },
-    ];
-    
-    let step = 0;
-    const interval = setInterval(() => {
-      if (step >= steps.length) {
-        clearInterval(interval);
-        setDesktopStatus('running');
-        showToast('Desktop is ready! Click "Open Desktop" to connect.', 'success');
-        return;
+    fetch(`${CONFIG.API_BASE_URL}/api/v1/deployments/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tenant_id: tenantId,
+        name: `Primary Workspace`,
+        image: 'kasmweb/ubuntu-focal-desktop:1.14.0',
+        subdomain: `ws-${tenantId?.substring(0,8)}.arimarun.io`
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.id) {
+        setDeployments([data]);
+        setActiveDeploymentId(data.id);
+        pollStatus(data.id);
+      } else if (data.detail) {
+        showToast(data.detail, 'error');
+        setDesktopStatus('stopped');
       }
-      setProgressPct(steps[step].pct);
-      setProgressLabel(steps[step].label);
-      step++;
-    }, 700);
+    })
+    .catch(err => {
+      console.error("Deploy failed", err);
+      setDesktopStatus('failed');
+    });
   };
 
   const stopDesktop = () => {
     if (desktopStatus !== 'running') return;
+    resetWorkspace();
+  };
+
+  const resetWorkspace = () => {
+    if (!activeDeploymentId) {
+      setDesktopStatus('stopped');
+      return;
+    }
+    
     setDesktopStatus('stopped');
-    showToast('Desktop stopped. Your files are saved.', 'success');
-    setActiveSessionSecs(0);
+    setProgressPct(0);
+    setProgressLabel('Stopped');
+    setConsoleLogs([]);
+    showToast('Workspace reset initiated...', 'info');
+
+    fetch(`${CONFIG.API_BASE_URL}/api/v1/deployments/${activeDeploymentId}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    })
+    .then(res => {
+      if (!res.ok) throw new Error('Failed to reset workspace');
+      return res.json();
+    })
+    .then(() => {
+      setDeployments([]);
+      setActiveDeploymentId(null);
+      showToast('Workspace completely reset. Launch when ready!', 'success');
+    })
+    .catch(err => {
+      console.error(err);
+      showToast('Error resetting workspace', 'error');
+    });
   };
 
   const selectPlan = (plan) => {
@@ -111,41 +239,7 @@ export default function DashboardPage() {
   }, [desktopStatus]);
 
   if (!user) {
-    return (
-      <div id="auth-screen">
-        <div className="auth-card">
-          <div className="auth-logo">
-            <div className="auth-logo-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2">
-                <rect x="2" y="3" width="20" height="14" rx="2"/>
-                <path d="M8 21h8M12 17v4"/>
-                <circle cx="12" cy="10" r="3"/>
-              </svg>
-            </div>
-            <div className="auth-logo-text">Arima<span>Run</span></div>
-          </div>
-          <div className="auth-title">Sign in to your workspace</div>
-          <div className="auth-sub">Access your cloud desktop from any browser, anywhere.</div>
-
-          <div id="login-form">
-            <div className="field">
-              <label>Email address</label>
-              <input type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} />
-            </div>
-            <div className="field">
-              <label>Password</label>
-              <input type="password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && doLogin()} />
-            </div>
-            <button className="btn-primary" onClick={doLogin}>Sign in</button>
-            <div className="auth-error">{authError}</div>
-          </div>
-
-          <div className="auth-footer">
-            Don't have an account? <a href="#" onClick={(e) => { e.preventDefault(); showToast('Signup coming soon!', 'success'); }}>Start free trial</a>
-          </div>
-        </div>
-      </div>
-    );
+    return <div style={{padding: '50px', color: '#fff', textAlign: 'center'}}>Loading...</div>;
   }
 
   const m = Math.floor(activeSessionSecs / 60);
@@ -227,7 +321,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {desktopStatus === 'stopped' && (
+            {(desktopStatus === 'stopped' || desktopStatus === 'failed') && (
               <div className="action-row">
                 <button className="btn-launch" onClick={launchDesktop}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -238,21 +332,31 @@ export default function DashboardPage() {
               </div>
             )}
             
-            {desktopStatus === 'starting' && (
-              <div className="startup-progress" style={{ display: 'block' }}>
-                <div className="progress-label">
-                  <span>{progressLabel}</span>
-                  <span>{progressPct}%</span>
+            {(desktopStatus === 'starting' || desktopStatus === 'pending' || desktopStatus === 'provisioning') && (
+              <div style={{ marginTop: '16px' }}>
+                <div className="startup-progress" style={{ display: 'block' }}>
+                  <div className="progress-label">
+                    <span>{progressLabel}</span>
+                    <span>{progressPct}%</span>
+                  </div>
+                  <div className="progress-track">
+                    <div className="progress-fill" style={{ width: `${progressPct}%` }}></div>
+                  </div>
                 </div>
-                <div className="progress-track">
-                  <div className="progress-fill" style={{ width: `${progressPct}%` }}></div>
+                <div className="action-row" style={{ marginTop: '12px' }}>
+                  <button className="btn-stop" onClick={resetWorkspace} style={{ background: '#ff5f57', borderColor: '#ff5f57', color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    </svg>
+                    Stop & Reset Workspace
+                  </button>
                 </div>
               </div>
             )}
             
             {desktopStatus === 'running' && (
               <div className="action-row">
-                <a className="btn-open" href="#" onClick={(e) => { e.preventDefault(); showToast('In production this opens your desktop at your-id.yourdomain.com', 'success'); }}>
+                <a className="btn-open" href={`https://${deployments[0]?.subdomain}`} target="_blank" rel="noopener noreferrer">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <rect x="2" y="3" width="20" height="14" rx="2"/>
                     <path d="M8 21h8M12 17v4"/>
@@ -265,6 +369,65 @@ export default function DashboardPage() {
                   </svg>
                   Stop
                 </button>
+              </div>
+            )}
+
+            <button className="btn-secondary" onClick={() => setShowConsole(!showConsole)} style={{
+              marginTop: '16px', 
+              fontSize: '12px', 
+              padding: '8px 12px', 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '6px', 
+              cursor: 'pointer', 
+              background: 'rgba(255,255,255,0.03)', 
+              border: '1px solid rgba(255,255,255,0.08)', 
+              color: '#e2e8f0', 
+              borderRadius: '6px',
+              transition: 'all 0.2s ease'
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="4 17 10 11 4 5"/>
+                <line x1="12" y1="19" x2="20" y2="19"/>
+              </svg>
+              {showConsole ? 'Hide Console Logs' : 'Show Console Logs'}
+            </button>
+
+            {showConsole && (
+              <div className="terminal-panel" style={{ 
+                marginTop: '16px', 
+                background: '#090d16', 
+                border: '1px solid #1f2937', 
+                borderRadius: '8px', 
+                padding: '12px', 
+                fontFamily: 'monospace', 
+                fontSize: '12px', 
+                color: '#a3b8cc', 
+                maxHeight: '220px', 
+                overflowY: 'auto',
+                boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.8)'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #1f2937', paddingBottom: '6px', marginBottom: '8px', color: consoleOffline ? '#f59e0b' : '#4ade80', fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.05em' }}>
+                  <span>{consoleOffline ? '⚠️ CONSOLE OFFLINE (RECONNECTING...)' : '⚡ LIVE SANDBOX PROVISIONING CONSOLE'}</span>
+                  <button onClick={() => setShowConsole(false)} style={{ background: 'none', border: 'none', color: '#ff5f57', cursor: 'pointer', fontSize: '14px', lineHeight: 1 }}>×</button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {consoleLogs.length === 0 ? (
+                    <span style={{ color: 'rgba(255,255,255,0.3)' }}>No logs available yet. Click 'Launch Desktop' to stream live logs...</span>
+                  ) : (
+                    consoleLogs.map((log, index) => (
+                      <div key={index} style={{
+                        whiteSpace: 'pre-wrap', 
+                        lineHeight: '1.4',
+                        color: log.includes('FAILED') || log.includes('failed') || log.includes('Error') ? '#ff605c' : 
+                               log.includes('RUNNING') || log.includes('successfully') || log.includes('Ready') ? '#00ca4e' : 
+                               log.includes('---') ? '#818cf8' : '#e2e8f0'
+                      }}>
+                        {log}
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             )}
           </div>
