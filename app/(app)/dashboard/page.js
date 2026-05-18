@@ -7,31 +7,31 @@ import { CONFIG } from '@/lib/config';
 
 const SESSION_HISTORY = [
   { date: 'May 13, 2026', duration: '2h 14m', from: 'Chrome / macOS', status: 'completed' },
-  { date: 'May 11, 2026', duration: '45m',    from: 'Firefox / Linux', status: 'completed' },
+  { date: 'May 11, 2026', duration: '45m', from: 'Firefox / Linux', status: 'completed' },
   { date: 'May 10, 2026', duration: '3h 02m', from: 'Chrome / macOS', status: 'completed' },
-  { date: 'May 7, 2026',  duration: '1h 18m', from: 'Edge / Windows',  status: 'completed' },
-  { date: 'May 4, 2026',  duration: '58m',    from: 'Chrome / macOS', status: 'completed' },
+  { date: 'May 7, 2026', duration: '1h 18m', from: 'Edge / Windows', status: 'completed' },
+  { date: 'May 4, 2026', duration: '58m', from: 'Chrome / macOS', status: 'completed' },
 ];
 
 export default function DashboardPage() {
-  const [user, setUser]                       = useState(null);
-  const [tenantId, setTenantId]               = useState(null);
+  const [user, setUser] = useState(null);
+  const [tenantId, setTenantId] = useState(null);
   const [subscriptionStatus, setSubscriptionStatus] = useState('none');
-  const [trialEndsAt, setTrialEndsAt]         = useState(null);
-  const [product, setProduct]                 = useState(null);   // real product from API
-  const [products, setProducts]               = useState({});     // full catalog for upgrade modal
-  const [deployments, setDeployments]         = useState([]);
-  const [desktopStatus, setDesktopStatus]     = useState('stopped');
-  const [progressPct, setProgressPct]         = useState(0);
-  const [progressLabel, setProgressLabel]     = useState('Starting container...');
-  const [toastMsg, setToastMsg]               = useState('');
-  const [toastType, setToastType]             = useState('');
+  const [trialEndsAt, setTrialEndsAt] = useState(null);
+  const [product, setProduct] = useState(null);   // real product from API
+  const [products, setProducts] = useState({});     // full catalog for upgrade modal
+  const [deployments, setDeployments] = useState([]);
+  const [desktopStatus, setDesktopStatus] = useState('stopped');
+  const [progressPct, setProgressPct] = useState(0);
+  const [progressLabel, setProgressLabel] = useState('Starting container...');
+  const [toastMsg, setToastMsg] = useState('');
+  const [toastType, setToastType] = useState('');
   const [activeSessionSecs, setActiveSessionSecs] = useState(0);
-  const [showConsole, setShowConsole]         = useState(false);
-  const [consoleLogs, setConsoleLogs]         = useState([]);
+  const [showConsole, setShowConsole] = useState(false);
+  const [consoleLogs, setConsoleLogs] = useState([]);
   const [activeDeploymentId, setActiveDeploymentId] = useState(null);
-  const [consoleOffline, setConsoleOffline]   = useState(false);
-  const [upgradeOpen, setUpgradeOpen]         = useState(false);
+  const [consoleOffline, setConsoleOffline] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const router = useRouter();
 
   const showToast = (msg, type = 'success') => {
@@ -88,7 +88,7 @@ export default function DashboardPage() {
     apiFetch(`${CONFIG.API_BASE_URL}/api/v1/subscriptions/products`)
       .then(res => res.json())
       .then(data => setProducts(data.products || {}))
-      .catch(() => {});
+      .catch(() => { });
   }, [router]);
 
   const pollStatus = (deploymentId) => {
@@ -100,8 +100,8 @@ export default function DashboardPage() {
           setDeployments(deps);
           if (d) {
             setDesktopStatus(d.status);
-            if (d.status === 'running')  { clearInterval(interval); setProgressPct(100); setProgressLabel('Ready!'); showToast('Desktop is ready!', 'success'); }
-            if (d.status === 'failed')   { clearInterval(interval); setProgressLabel('Provisioning failed'); showToast('Failed to start desktop.', 'error'); }
+            if (d.status === 'running') { clearInterval(interval); setProgressPct(100); setProgressLabel('Ready!'); showToast('Desktop is ready!', 'success'); }
+            if (d.status === 'failed') { clearInterval(interval); setProgressLabel('Provisioning failed'); showToast('Failed to start desktop.', 'error'); }
             if (d.status === 'provisioning') { setProgressPct(50); setProgressLabel('Starting container...'); }
           }
         })
@@ -145,7 +145,7 @@ export default function DashboardPage() {
         tenant_id: tenantId,
         name: 'Primary Workspace',
         image: 'kasmweb/ubuntu-focal-desktop:1.14.0',
-        subdomain: `ws-${tenantId?.substring(0, 8)}.arimarun.io`,
+        subdomain: `ws-${tenantId?.substring(0, 8)}.arima.io`,
       }),
     })
       .then(res => res.json())
@@ -193,13 +193,13 @@ export default function DashboardPage() {
   const daysLeft = trialDaysLeft();
 
   // Derive specs from real product data (fallback to sensible defaults)
-  const specCpu     = product?.cpu     || '0.5';
-  const specMemory  = product?.memory  || '512m';
+  const specCpu = product?.cpu || '0.5';
+  const specMemory = product?.memory || '512m';
   const specStorage = product?.storage_gb != null ? `${product.storage_gb} GB` : '10 GB';
-  const specPrice   = product?.monthly_price_pence != null
+  const specPrice = product?.monthly_price_pence != null
     ? (product.monthly_price_pence === 0 ? 'Free trial' : `£${(product.monthly_price_pence / 100).toFixed(2)}/mo`)
     : 'Trial';
-  const planLabel   = product?.name || (subscriptionStatus === 'trialing' ? 'Starter Trial' : user.plan);
+  const planLabel = product?.name || (subscriptionStatus === 'trialing' ? 'Starter Trial' : user.plan);
 
   return (
     <>
@@ -207,9 +207,9 @@ export default function DashboardPage() {
         <nav className="nav">
           <div className="nav-logo">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2">
-              <rect x="2" y="3" width="20" height="14" rx="2"/>
-              <path d="M8 21h8M12 17v4"/>
-              <circle cx="12" cy="10" r="3"/>
+              <rect x="2" y="3" width="20" height="14" rx="2" />
+              <path d="M8 21h8M12 17v4" />
+              <circle cx="12" cy="10" r="3" />
             </svg>
             Arima<span>Run</span>
           </div>
@@ -306,7 +306,7 @@ export default function DashboardPage() {
               <div className="action-row">
                 <button className="btn-launch" onClick={launchDesktop}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <polygon points="5 3 19 12 5 21 5 3"/>
+                    <polygon points="5 3 19 12 5 21 5 3" />
                   </svg>
                   Launch Desktop
                 </button>
@@ -330,7 +330,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="action-row" style={{ marginTop: '12px' }}>
                   <button className="btn-stop" onClick={resetWorkspace} style={{ background: '#ff5f57', borderColor: '#ff5f57', color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2" /></svg>
                     Stop & Reset Workspace
                   </button>
                 </div>
@@ -340,11 +340,11 @@ export default function DashboardPage() {
             {desktopStatus === 'running' && (
               <div className="action-row">
                 <a className="btn-open" href={`https://${deployments[0]?.subdomain}`} target="_blank" rel="noopener noreferrer">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" /></svg>
                   Open Desktop
                 </a>
                 <button className="btn-stop" onClick={resetWorkspace}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2" /></svg>
                   Stop
                 </button>
               </div>
@@ -356,7 +356,7 @@ export default function DashboardPage() {
               border: '1px solid rgba(255,255,255,0.08)', color: '#e2e8f0', borderRadius: '6px', transition: 'all 0.2s ease',
             }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+                <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
               </svg>
               {showConsole ? 'Hide Console Logs' : 'Show Console Logs'}
             </button>
@@ -396,7 +396,7 @@ export default function DashboardPage() {
             {/* Desktop plans from catalog */}
             {(products.desktop || []).map(p => {
               const isCurrent = product?.name === p.name;
-              const isFree    = p.monthly_price_pence === 0;
+              const isFree = p.monthly_price_pence === 0;
               return (
                 <div key={p.id} className={`plan-card ${isCurrent ? 'current' : ''}`}>
                   <div className="plan-name">
