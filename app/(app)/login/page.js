@@ -26,7 +26,10 @@ export default function LoginPage() {
         return;
       }
       
-      // Since it uses HTTP-only cookies, we just redirect on success
+      // Save token to localStorage for cross-origin auth
+      if (data.access_token) {
+        localStorage.setItem('access_token', data.access_token);
+      }
       router.push('/dashboard');
     } catch (err) {
       setError('Network error. Please try again.');

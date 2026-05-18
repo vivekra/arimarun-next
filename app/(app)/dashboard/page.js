@@ -40,8 +40,16 @@ export default function DashboardPage() {
     setTimeout(() => setToastMsg(''), 4000);
   };
 
+  const apiFetch = (url, options = {}) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const headers = { ...options.headers };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return fetch(url, { ...options, headers });
+  };
+
   const doLogout = async () => {
-    await fetch(`${CONFIG.API_BASE_URL}/api/v1/auth/logout`, { method: 'POST', credentials: 'include' });
+    await apiFetch(`${CONFIG.API_BASE_URL}/api/v1/auth/logout`, { method: 'POST' });
+    if (typeof window !== 'undefined') localStorage.removeItem('access_token');
     router.push('/login');
   };
 
@@ -56,7 +64,7 @@ export default function DashboardPage() {
 
   // ── Fetch user + catalog on mount ───────────────────────────────────────
   useEffect(() => {
-    fetch(`${CONFIG.API_BASE_URL}/api/v1/auth/me`, { credentials: 'include' })
+    apiFetch(`${CONFIG.API_BASE_URL}/api/v1/auth/me`)
       .then(res => { if (!res.ok) throw new Error('Not logged in'); return res.json(); })
       .then(data => {
         setUser({ email: data.email, name: data.full_name, plan: data.plan || 'starter' });
@@ -66,7 +74,7 @@ export default function DashboardPage() {
         setProduct(data.product || null);   // product details from /me
 
         if (data.tenant_id) {
-          fetch(`${CONFIG.API_BASE_URL}/api/v1/deployments/${data.tenant_id}`, { credentials: 'include' })
+          apiFetch(`${CONFIG.API_BASE_URL}/api/v1/deployments/${data.tenant_id}`)
             .then(res => res.json())
             .then(deps => {
               if (deps.length > 0) {
@@ -81,7 +89,7 @@ export default function DashboardPage() {
       .catch(() => router.push('/login'));
 
     // Fetch product catalog for upgrade modal
-    fetch(`${CONFIG.API_BASE_URL}/api/v1/subscriptions/products`)
+    apiFetch(`${CONFIG.API_BASE_URL}/api/v1/subscriptions/products`)
       .then(res => res.json())
       .then(data => setProducts(data.products || {}))
       .catch(() => {});
@@ -89,7 +97,7 @@ export default function DashboardPage() {
 
   const pollStatus = (deploymentId) => {
     const interval = setInterval(() => {
-      fetch(`${CONFIG.API_BASE_URL}/api/v1/deployments/${tenantId}`, { credentials: 'include' })
+      apiFetch(`${CONFIG.API_BASE_URL}/api/v1/deployments/${tenantId}`)
         .then(res => { if (!res.ok) throw new Error(); return res.json(); })
         .then(deps => {
           const d = deps.find(dep => dep.id === deploymentId);
@@ -107,7 +115,7 @@ export default function DashboardPage() {
 
   const fetchLogs = (deploymentId) => {
     if (!deploymentId) return;
-    fetch(`${CONFIG.API_BASE_URL}/api/v1/deployments/logs/${deploymentId}`, { credentials: 'include' })
+    apiFetch(`${CONFIG.API_BASE_URL}/api/v1/deployments/logs/${deploymentId}`)
       .then(res => { if (!res.ok) throw new Error(); return res.json(); })
       .then(data => { setConsoleOffline(false); if (data.logs) setConsoleLogs(data.logs); })
       .catch(() => setConsoleOffline(true));
@@ -134,10 +142,9 @@ export default function DashboardPage() {
     setProgressPct(10);
     setProgressLabel('Requesting provisioning...');
 
-    fetch(`${CONFIG.API_BASE_URL}/api/v1/deployments/`, {
+    apiFetch(`${CONFIG.API_BASE_URL}/api/v1/deployments/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({
         tenant_id: tenantId,
         name: 'Primary Workspace',
@@ -167,8 +174,8 @@ export default function DashboardPage() {
     setConsoleLogs([]);
     showToast('Workspace reset initiated...', 'info');
 
-    fetch(`${CONFIG.API_BASE_URL}/api/v1/deployments/${activeDeploymentId}`, {
-      method: 'DELETE', credentials: 'include',
+    apiFetch(`${CONFIG.API_BASE_URL}/api/v1/deployments/${activeDeploymentId}`, {
+      method: 'DELETE',
     })
       .then(res => { if (!res.ok) throw new Error(); return res.json(); })
       .then(() => { setDeployments([]); setActiveDeploymentId(null); showToast('Workspace reset. Launch when ready!', 'success'); })
