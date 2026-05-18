@@ -9,6 +9,7 @@ function RegisterForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const [plan, setPlan] = useState('');
@@ -18,7 +19,9 @@ function RegisterForm() {
   }, [searchParams]);
 
   const doRegister = async () => {
+    if (isLoading) return;
     setError('');
+    setIsLoading(true);
     try {
       const res = await fetch(`${CONFIG.API_BASE_URL}/api/v1/auth/register`, {
         method: 'POST',
@@ -30,6 +33,7 @@ function RegisterForm() {
       if (!res.ok) {
         const data = await res.json();
         setError(data.detail || 'Registration failed');
+        setIsLoading(false);
         return;
       }
       
@@ -48,6 +52,7 @@ function RegisterForm() {
       }
     } catch (err) {
       setError('Network error. Please try again.');
+      setIsLoading(false);
     }
   };
 
@@ -82,7 +87,14 @@ function RegisterForm() {
             <label>Password</label>
             <input type="password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && doRegister()} />
           </div>
-          <button className="btn-primary" onClick={doRegister}>Sign up</button>
+          <button 
+            className="btn-primary" 
+            onClick={doRegister}
+            disabled={isLoading}
+            style={{ opacity: isLoading ? 0.7 : 1, cursor: isLoading ? 'not-allowed' : 'pointer' }}
+          >
+            {isLoading ? 'Signing up...' : 'Sign up'}
+          </button>
           {error && <div className="auth-error" style={{color: '#ff5f57', marginTop: '10px'}}>{error}</div>}
         </div>
 

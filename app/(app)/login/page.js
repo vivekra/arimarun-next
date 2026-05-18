@@ -8,10 +8,13 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
   const doLogin = async () => {
+    if (isLoading) return;
     setError('');
+    setIsLoading(true);
     try {
       const res = await fetch(`${CONFIG.API_BASE_URL}/api/v1/auth/login`, {
         method: 'POST',
@@ -23,6 +26,7 @@ export default function LoginPage() {
       if (!res.ok) {
         const data = await res.json();
         setError(data.detail || 'Login failed');
+        setIsLoading(false);
         return;
       }
       
@@ -30,6 +34,7 @@ export default function LoginPage() {
       router.push('/dashboard');
     } catch (err) {
       setError('Network error. Please try again.');
+      setIsLoading(false);
     }
   };
 
@@ -58,7 +63,14 @@ export default function LoginPage() {
             <label>Password</label>
             <input type="password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && doLogin()} />
           </div>
-          <button className="btn-primary" onClick={doLogin}>Sign in</button>
+          <button 
+            className="btn-primary" 
+            onClick={doLogin} 
+            disabled={isLoading}
+            style={{ opacity: isLoading ? 0.7 : 1, cursor: isLoading ? 'not-allowed' : 'pointer' }}
+          >
+            {isLoading ? 'Signing in...' : 'Sign in'}
+          </button>
           {error && <div className="auth-error" style={{color: '#ff5f57', marginTop: '10px'}}>{error}</div>}
         </div>
 

@@ -100,7 +100,14 @@ export default function DashboardPage() {
           setDeployments(deps);
           if (d) {
             setDesktopStatus(d.status);
-            if (d.status === 'running') { clearInterval(interval); setProgressPct(100); setProgressLabel('Ready!'); showToast('Desktop is ready!', 'success'); }
+            if (d.status === 'running') { 
+              clearInterval(interval); 
+              setProgressPct(100); 
+              setProgressLabel('Ready!'); 
+              showToast('Desktop is ready!', 'success'); 
+              // Automatically redirect directly to workspace URL
+              window.open(`https://${d.subdomain}`, '_blank');
+            }
             if (d.status === 'failed') { clearInterval(interval); setProgressLabel('Provisioning failed'); showToast('Failed to start desktop.', 'error'); }
             if (d.status === 'provisioning') { setProgressPct(50); setProgressLabel('Starting container...'); }
           }
@@ -148,18 +155,26 @@ export default function DashboardPage() {
         subdomain: `ws-${tenantId?.substring(0, 8)}.arima.io`,
       }),
     })
-      .then(res => res.json())
+      .then(async res => {
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || 'Launch failed. Please try again.');
+        }
+        return res.json();
+      })
       .then(data => {
         if (data.id) {
           setDeployments([data]);
           setActiveDeploymentId(data.id);
           pollStatus(data.id);
         } else {
-          showToast(data.detail || 'Launch failed', 'error');
-          setDesktopStatus('stopped');
+          throw new Error(data.detail || 'Launch failed');
         }
       })
-      .catch(() => { showToast('Network error. Please retry.', 'error'); setDesktopStatus('failed'); });
+      .catch((err) => { 
+        showToast(err.message || 'Network error. Please retry.', 'error'); 
+        setDesktopStatus('stopped'); 
+      });
   };
 
   const resetWorkspace = () => {
