@@ -42,10 +42,6 @@ function RegisterForm() {
       });
 
       if (loginRes.ok) {
-        const loginData = await loginRes.json();
-        if (loginData.access_token) {
-          localStorage.setItem('access_token', loginData.access_token);
-        }
         router.push('/dashboard');
       } else {
         router.push('/login');

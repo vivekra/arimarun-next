@@ -41,15 +41,11 @@ export default function DashboardPage() {
   };
 
   const apiFetch = (url, options = {}) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    const headers = { ...options.headers };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    return fetch(url, { ...options, headers });
+    return fetch(url, { ...options, credentials: 'include' });
   };
 
   const doLogout = async () => {
     await apiFetch(`${CONFIG.API_BASE_URL}/api/v1/auth/logout`, { method: 'POST' });
-    if (typeof window !== 'undefined') localStorage.removeItem('access_token');
     router.push('/login');
   };
 
