@@ -41,7 +41,7 @@ export default function DashboardPage() {
   };
 
   const apiFetch = (url, options = {}) => {
-    return fetch(url, { ...options, credentials: 'include' });
+    return fetch(url, { cache: 'no-store', ...options, credentials: 'include' });
   };
 
   const doLogout = async () => {
