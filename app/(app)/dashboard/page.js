@@ -109,6 +109,7 @@ export default function DashboardPage() {
               window.open(`https://${d.subdomain}`, '_blank');
             }
             if (d.status === 'failed') { clearInterval(interval); setProgressLabel('Provisioning failed'); showToast('Failed to start desktop.', 'error'); }
+            if (d.status === 'scheduled') { setProgressPct(30); setProgressLabel('Scheduled for worker...'); }
             if (d.status === 'provisioning') { setProgressPct(50); setProgressLabel('Starting container...'); }
           }
         })
@@ -333,7 +334,7 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {(desktopStatus === 'starting' || desktopStatus === 'pending' || desktopStatus === 'provisioning') && (
+            {(desktopStatus === 'starting' || desktopStatus === 'pending' || desktopStatus === 'scheduled' || desktopStatus === 'provisioning') && (
               <div style={{ marginTop: '16px' }}>
                 <div className="startup-progress" style={{ display: 'block' }}>
                   <div className="progress-label">
